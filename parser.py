@@ -1,40 +1,46 @@
-import urllib.request, re, random, time
+import urllib.request
+import json
+import random
+import time
 
-# Берем только крупные агрегаторы, первый проблемный сайт выкидываем
-urls = [
-    "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt",
-    "https://raw.githubusercontent.com/vfarid/v2ray-share/main/all_links.txt"
-]
+# Используем проверенную базу, где ключи лежат по отдельности в JSON
+json_url = "https://raw.githubusercontent.com/tiagorrg/vless-checker/main/docs/keys.json"
+final_list = []
 
-all_keys = []
-print("Начинаем жесткий отбор...")
+print("Начинаем чистый отбор...")
 
-for url in urls:
-    try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            text = response.read().decode('utf-8', errors='ignore')
-            # Ищем только VLESS и VMESS
-            keys = re.findall(r'(vless://[^\s]+|vmess://[^\s]+)', text)
-            all_keys.extend(keys)
-    except:
-        pass
+try:
+    req = urllib.request.Request(json_url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=10) as response:
+        data = json.loads(response.read().decode('utf-8'))
+        
+        # Обходим регионы в JSON (каждый регион имеет список top10)
+        for region_name, region_data in data.items():
+            if isinstance(region_data, dict) and "top10" in region_data:
+                for item in region_data["top10"]:
+                    if isinstance(item, dict) and "key" in item:
+                        # Берем чистую ссылку vless
+                        clean_key = item["key"].strip()
+                        if clean_key.startswith("vless://"):
+                            final_list.append(clean_key)
+except Exception as e:
+    print(f"Ошибка при чтении базы: {e}")
 
-# Убираем дубликаты
-unique_keys = list(set(all_keys))
+# Очищаем от дублей
+final_list = list(set(final_list))
 
-# Перемешиваем, чтобы при каждом запуске были новые
-random.shuffle(unique_keys)
+# Перемешиваем, чтобы при каждом запуске Гитхаба сервера были новые
+random.shuffle(final_list)
 
-# ЖЕСТКИЙ ЛИМИТ: берем ровно 5 штук
-final_list = unique_keys[:5]
+# ЖЕСТКИЙ ЛИМИТ: берем строго 5 отдельных серверов
+final_list = final_list[:5]
 
-# Добавляем метку времени, чтобы Хапп видел, что файл реально обновился
+# Добавляем метку времени первой строкой, чтобы Hiddify видел обновление
 timestamp = f"# Updated at {time.strftime('%Y-%m-%d %H:%M:%S')}"
 final_list.insert(0, timestamp)
 
-# Записываем в файл
+# Записываем аккуратно по строкам
 with open("sub.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(final_list))
 
-print("🏁 Готово! Записано строго 5 серверов.")
+print(f"🏁 Готово! Записано строго {len(final_list) - 1} серверов + метка времени.")
