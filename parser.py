@@ -1,61 +1,36 @@
 import urllib.request
-import json
 import re
 
-# Прямая ссылка на JSON файл
+# Прямая ссылка на сырой JSON, где лежит вся куча данных
 json_url = "https://raw.githubusercontent.com/tiagorrg/vless-checker/main/docs/keys.json"
 
-vless_links = []
-
-print("Запуск исправленного JSON-парсера...")
+print("Запуск PyCharm-метода фильтрации...")
 
 try:
-    # Запрашиваем файл, притворяясь браузером
+    # Притворяемся браузером, чтобы Гитхаб автора нас не забанил
     req = urllib.request.Request(json_url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=15) as response:
-        # Читаем и загружаем JSON структуру
-        data = json.loads(response.read().decode('utf-8'))
+        raw_text = response.read().decode('utf-8', errors='ignore')
         
-        # Перебираем всё, что есть в JSON
-        for key, value in data.items():
-            # Если это регион (внутри лежит словарь с "top10")
-            if isinstance(value, dict) and "top10" in value:
-                for item in value["top10"]:
-                    if isinstance(item, dict) and "key" in item:
-                        vless_links.append(item["key"])
-            
-            # Дополнительно проверяем одиночное поле "best", если оно есть в регионе
-            elif isinstance(value, dict) and "best" in value:
-                if isinstance(value["best"], str) and value["best"].startswith(("vless://", "vmess://", "ss://", "trojan://")):
-                    vless_links.append(value["best"])
-                        
-        print(f"Успешно обработан JSON. Найдено базовых ключей: {len(vless_links)}")
+        # МАГИЯ ФИЛЬТРАЦИИ: Вытаскиваем ТОЛЬКО чистые ссылки протоколов.
+        # Всё остальное (даты, пинги, скобки, кавычки, слова 'host') робот просто ВЫКИДЫВАЕТ.
+        clean_keys = re.findall(r'(vless://[^\s"\x27\,]+|vmess://[^\s"\x27\,]+|ss://[^\s"\x27\,]+|trojan://[^\s"\x27\,]+)', raw_text)
+        
+        # Убираем дубликаты, если челик выложил одинаковые ключи
+        clean_keys = list(set(clean_keys))
+        
+        print(f"Фильтр сработал! Отсеяно всё лишнее. Найдено чистых ключей: {len(clean_keys)}")
 
 except Exception as e:
-    print(f"Ошибка при разборе структуры JSON: {e}")
+    print(f"Ошибка при скачивании или фильтрации: {e}")
+    clean_keys = []
 
-# Запасной План Б: Если по структуре не вышло, собираем тупо регуляркой по всему тексту
-if not vless_links:
-    try:
-        print("План Б: Сбор через регулярные выражения...")
-        req = urllib.request.Request(json_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=15) as response:
-            text_content = response.read().decode('utf-8')
-            # Ищет всё, что похоже на vless://, vmess:// и т.д.
-            vless_links = re.findall(r'(vless://[^\s"\x27]+|vmess://[^\s"\x27]+|ss://[^\s"\x27]+|trojan://[^\s"\x27]+)', text_content)
-            print(f"Регулярка нашла ключей: {len(vless_links)}")
-    except Exception as e:
-        print(f"Ошибка Плана Б: {e}")
+# Если вдруг у автора всё упало и ключей нет вообще, создаем одну аккуратную строку-заглушку
+if not clean_keys:
+    clean_keys.append("vless://99999999-9999-9999-9999-999999999999@127.0.0.1:9999?encryption=none&security=none#☁️_ОБЛАКО_ПУСТО_ПОВТОРЮ_ПОЗЖЕ")
 
-# Удаляем дубликаты
-vless_links = list(set(vless_links))
-
-# Если вообще ничего не нашлось, создаем заглушку, чтобы Hiddify не ругался на пустой файл
-if not vless_links:
-    vless_links.append("vless://99999999-9999-9999-9999-999999999999@127.0.0.1:9999?encryption=none&security=none#☁️_ОБЛАКО_ПУСТО_ПОВТОРЮ_ПОЗЖЕ")
-
-# Записываем всё в файл для Hiddify
+# Сохраняем в файл sub.txt ТОЛЬКО чистые ключи, каждый с новой строки
 with open("sub.txt", "w", encoding="utf-8") as f:
-    f.write("\n".join(vless_links))
+    f.write("\n".join(clean_keys))
 
-print(f"🏁 Сбор завершен! В sub.txt сохранено {len(vless_links)} уникальных конфигураций.")
+print("🏁 Файл sub.txt успешно перезаписан и готов для Hiddify!")
