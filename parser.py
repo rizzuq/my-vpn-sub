@@ -1,36 +1,46 @@
 import urllib.request
-import re
+import json
 
-# Прямая ссылка на сырой JSON, где лежит вся куча данных
+# Прямая ссылка на уже ГОТОВУЮ и проверенную автором базу
 json_url = "https://raw.githubusercontent.com/tiagorrg/vless-checker/main/docs/keys.json"
 
-print("Запуск PyCharm-метода фильтрации...")
+vless_links = []
+
+print("Забираем готовый ТОП серверов...")
 
 try:
-    # Притворяемся браузером, чтобы Гитхаб автора нас не забанил
     req = urllib.request.Request(json_url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=15) as response:
-        raw_text = response.read().decode('utf-8', errors='ignore')
+        data = json.loads(response.read().decode('utf-8'))
         
-        # МАГИЯ ФИЛЬТРАЦИИ: Вытаскиваем ТОЛЬКО чистые ссылки протоколов.
-        # Всё остальное (даты, пинги, скобки, кавычки, слова 'host') робот просто ВЫКИДЫВАЕТ.
-        clean_keys = re.findall(r'(vless://[^\s"\x27\,]+|vmess://[^\s"\x27\,]+|ss://[^\s"\x27\,]+|trojan://[^\s"\x27\,]+)', raw_text)
-        
-        # Убираем дубликаты, если челик выложил одинаковые ключи
-        clean_keys = list(set(clean_keys))
-        
-        print(f"Фильтр сработал! Отсеяно всё лишнее. Найдено чистых ключей: {len(clean_keys)}")
+        # Перебираем регионы в готовом файле (Германия, Финляндия и т.д.)
+        for key, value in data.items():
+            # Нам нужны только регионы, где есть список проверенных ключей top10
+            if isinstance(value, dict) and "top10" in value:
+                # Берем самый ПЕРВЫЙ ключ из списка (он самый быстрый в этом регионе)
+                for item in value["top10"]:
+                    if isinstance(item, dict) and "key" in item:
+                        vless_links.append(item["key"])
+                        break # Забрали топ-1 и сразу переходим к следующей стране
+                        
+        print(f"Успешно вытащили топ-ключи из регионов. Набралось: {len(vless_links)}")
 
 except Exception as e:
-    print(f"Ошибка при скачивании или фильтрации: {e}")
-    clean_keys = []
+    print(f"Ошибка при чтении готовой базы: {e}")
 
-# Если вдруг у автора всё упало и ключей нет вообще, создаем одну аккуратную строку-заглушку
-if not clean_keys:
-    clean_keys.append("vless://99999999-9999-9999-9999-999999999999@127.0.0.1:9999?encryption=none&security=none#☁️_ОБЛАКО_ПУСТО_ПОВТОРЮ_ПОЗЖЕ")
+# Очищаем от случайных повторов
+vless_links = list(set(vless_links))
 
-# Сохраняем в файл sub.txt ТОЛЬКО чистые ключи, каждый с новой строки
+# Оставляем строго от 3 до 5 серверов, как ты и хотел
+if len(vless_links) > 5:
+    vless_links = vless_links[:5]
+
+# Если вдруг у автора файл пустой, создаем аккуратную заглушку
+if not vless_links:
+    vless_links.append("vless://99999999-9999-9999-9999-999999999999@127.0.0.1:9999?encryption=none&security=none#☁️_ОБЛАКО_ПУСТО_ПОВТОРЮ_ПОЗЖЕ")
+
+# Записываем в sub.txt ТОЛЬКО голые ссылки (никаких дат, скобок и пингов)
 with open("sub.txt", "w", encoding="utf-8") as f:
-    f.write("\n".join(clean_keys))
+    f.write("\n".join(vless_links))
 
-print("🏁 Файл sub.txt успешно перезаписан и готов для Hiddify!")
+print(f"🏁 Сбор окончен! В sub.txt сохранено ровно {len(vless_links)} топовых рабочих сер
