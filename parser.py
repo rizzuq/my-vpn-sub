@@ -1,6 +1,5 @@
 import urllib.request, json, re, random
 
-# База автора (с пингом) + Резервы (агрегаторы)
 json_url = "https://raw.githubusercontent.com/tiagorrg/vless-checker/main/docs/keys.json"
 backup_urls = [
     "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/All_Configs_Sub.txt",
@@ -8,24 +7,21 @@ backup_urls = [
 ]
 
 final_list = []
-print("Запуск умного фильтра быстрых серверов...")
 
-# 1. Берем только быстрые из основы
+# 1. Тянем только быстрые из основной базы
 try:
     req = urllib.request.Request(json_url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=10) as response:
         data = json.loads(response.read().decode('utf-8'))
-        # Перебираем регионы
         for _, region in data.items():
             if isinstance(region, dict) and "top10" in region:
                 for item in region["top10"]:
-                    # ФИЛЬТР: Берем только если есть ключ и пинг < 200
+                    # ФИЛЬТР: Берем только живые с пингом < 200мс
                     if isinstance(item, dict) and item.get("latency_ms", 999) < 200:
                         final_list.append(item["key"])
-except Exception as e:
-    print(f"Основная база временно недоступна: {e}")
+except: pass
 
-# 2. Если серверов мало, добираем из резервов
+# 2. Если серверов мало, добираем из резервов (до 10 штук)
 if len(final_list) < 10:
     for url in backup_urls:
         try:
@@ -36,13 +32,10 @@ if len(final_list) < 10:
                 final_list.extend(keys)
         except: continue
 
-# Очистка и перемешивание
+# Итог: Уникальные, перемешанные, максимум 10 штук
 final_list = list(set(final_list))
 random.shuffle(final_list)
 final_list = final_list[:10]
 
-# Запись
 with open("sub.txt", "w", encoding="utf-8") as f:
     f.write("\n".join(final_list))
-
-print(f"🏁 Готово! В sub.txt записано {len(final_list)} самых быстрых серверов.")
